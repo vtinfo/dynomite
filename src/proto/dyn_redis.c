@@ -3037,7 +3037,9 @@ static rstatus_t redis_copy_bulk(struct msg *dst, struct msg *src, bool log) {
   }
 
   p = mbuf->pos;
-  ASSERT(*p == '$');
+  if (*p != '$') {
+    return DYNOMITE_PAYLOAD_TOO_LARGE;
+  }
   p++;
 
   if (p[0] == '-' && p[1] == '1') {
@@ -3051,7 +3053,7 @@ static rstatus_t redis_copy_bulk(struct msg *dst, struct msg *src, bool log) {
     }
     len += CRLF_LEN * 2;
     len += (p - mbuf->pos);
-  }
+  } 
   bytes = len;
 
   /* copy len bytes to dst */
@@ -3385,7 +3387,7 @@ static rstatus_t redis_append_key(struct msg *r, struct keypos *kpos_src) {
  *   +--------------------+     +---------------------+ +----+----------------+
  *   |   frag_id = 10     |     |   frag_id = 10      |     |   frag_id = 10 |
  *   |     nfrag = 3      |     |      nfrag = 0      |     |      nfrag = 0 |
- *   | frag_seq = x x x   |     |     key1, key3      |     |         key2 |
+ *   | frag_seq = x x x   |     |     key1, key3      |     |         key2   |
  *   +------------|-|-|---+     +---------------------+ +---------------------+
  *                | | |          ^    ^                          ^
  *                | \ \          |    |                          |
@@ -3513,7 +3515,7 @@ static rstatus_t redis_fragment_argx(struct msg *r, struct server_pool *pool,
       TAILQ_INSERT_TAIL(frag_msgq, sub_msg, m_tqe);
     }
 
-    status = redis_append_key(sub_msg, kpos);
+    status = redis_append_key(sub_msg, kpos); // Adds key to the sub_msg
     if (status != DN_OK) {
       dn_free(sub_msgs);
       return status;
@@ -3521,13 +3523,13 @@ static rstatus_t redis_fragment_argx(struct msg *r, struct server_pool *pool,
     if (key_step == 1) { // mget,del
       continue;
     } else {                                    // mset
-      status = redis_copy_bulk(NULL, r, false); // eat key
+      status = redis_copy_bulk(NULL, r, false); // Consumes key portion of the payload
       if (status != DN_OK) {
         dn_free(sub_msgs);
         return status;
       }
 
-      status = redis_copy_bulk(sub_msg, r, false);
+      status = redis_copy_bulk(sub_msg, r, false); // Consumes and copies value to the sub_msg fragment
       if (status != DN_OK) {
         dn_free(sub_msgs);
         return status;
