@@ -1587,8 +1587,13 @@ void redis_parse_req(struct msg *r, struct context *ctx) {
         }
 
         if (r->type == MSG_UNKNOWN) {
-          log_error("parsed unsupported command '%.*s'", p - m, m);
-          goto error;
+          // VIP changes to skip and ignore, treat it like a ping, and move on
+          log_warn("parsed unsupported command '%.*s'", p - m, m);
+          r->type = MSG_REQ_REDIS_PING;
+          r->msg_routing = ROUTING_LOCAL_NODE_ONLY;
+          p = p + 1;
+          r->is_read = 1;
+          goto done;
         }
 
         log_debug(LOG_VERB, "parsed command '%.*s'", p - m, m);
